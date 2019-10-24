@@ -1,9 +1,20 @@
+//#define SSD1306_128_32
 #include <DMAChannel.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "kinetis.h"
+
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+#define OLED_RESET    20 // A6 // Reset pin # (or -1 if sharing Arduino reset pin)
+//Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 display(OLED_RESET);
+
 
 // Multiple input & output objects use the Programmable Delay Block
 // to set their sample rate.  They must all configure the same
@@ -151,8 +162,14 @@ static volatile uint16_t sinetable[] = {
 };
 
 
+
+
 void setup() {
   Serial.begin(9600); 
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  //display.clearDisplay();
+  display.display();
+
   dma.begin(true); // allocate the DMA channel first
   
   SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
@@ -199,6 +216,13 @@ void setup() {
   dma.destination(*(volatile uint16_t *)&(DAC0_DAT0L));
   dma.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
   dma.enable();
+  pinMode(A0, INPUT);
+
+  display.cp437(true);         // Use full 256 char 'Code Page 437' font
+
+  /*display.clearDisplay();
+  display.drawBitmap(64,16, logo_bmp, 128, 32, 1);*/
+  delay(2000);
 }
 
 void loop() {
@@ -209,7 +233,60 @@ void loop() {
   Serial.println((0.5*2048.0 / 3.5));
   
   delay(1000);*/
+  
+  draw_status();
+  delay(2000);
+}
+
+
+
+
+void draw_status(void) {
+  // read temperature
+  int adcTempValue = analogRead(A0);
+  int signalA = analogRead(A1);
+
+  // voltage divider with 3k resistor 1st
+  //float thermistorR = 3000.0 * adcTempValue / (1023.0 - adcTempValue);
+  
+  float fixedR = 3000.0;
+  float thermistorR = fixedR*1023.0/adcTempValue - fixedR;
+  
+  float b_coeff = 3455.0;
+  // thermistor resistance @25C is 10k
+  float steinhart = (1.0/b_coeff) * log(thermistorR / 10000.0);     //  1/B * ln(R/Ro)
+  steinhart += 1.0 / (25.0 + 273.15); // + (1/To)
+  float temp = 1.0 / steinhart - 273.15;   // Invert and convert to Celsius
+  
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.setTextColor(WHITE);
+  display.print("Temp: ");
+  display.print(temp);
+  display.println("\xF8 C");
+  display.print("ADC: ");
+  display.println(adcTempValue);
+  display.print("Intensity Ix: ");
+  display.println(signalA);
+
+
 
   
+  //display.print((char)248);
+  display.display();
   
+  /*display.setTextSize(1);             // Normal 1:1 pixel scale
+  display.setTextColor(WHITE);        // Draw white text
+  display.setCursor(0,0);             // Start at top-left corner
+  display.println(F("Hello, world!"));
+
+  display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+  display.println(3.141592);
+
+  display.setTextSize(2);             // Draw 2X-scale text
+  display.setTextColor(WHITE);
+  display.print(F("0x")); display.println(0xDEADBEEF, HEX);*
+
+  display.display();*/
 }
