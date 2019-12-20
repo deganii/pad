@@ -1,11 +1,46 @@
+//#include <ADC.h>
+
+#include <PID_v1.h>
+#include <PID_AutoTune_v0.h>
+#include <SPI.h>
+
+
 //#define SSD1306_128_32
 #include <DMAChannel.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "kinetis.h"
+#include "kinetis.h"  
 
+#define Thermistor_PIN A0
+//#define Ix_PIN A1
+
+//PID Variables
+#define PID_PIN 4
+
+// ADC Variables
+const byte CH0 = 0b10000000; //Channel select, select channel 1, unipolar mode
+const int chipSelectPin = 10;
+unsigned long finresult;
+
+#include <ADC.h>
+
+const int Ix_PIN = A1;
+const int Iy_PIN = A2;
+ADC *adc = new ADC(); // adc object
+ADC::Sync_result result;
+
+
+
+unsigned long start_time = 0;
+
+double desiredTemp, temp, Output;
+//Specify the links and initial tuning parameters
+PID myPID(&temp, &Output, &desiredTemp,800,0,0, DIRECT);
+//PID_ATune aTune(&temp, &Output);
+//double aTuneStep=50, aTuneNoise=0.5, aTuneStartValue=255;
+//unsigned int aTuneLookBack=30;
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels
@@ -207,6 +242,9 @@ void setup() {
   float amplitude_scale = (2.2 - 0.6) / (3.3 - 0.0);  // (add an extra 200mV to avoid any clipping)
   uint16_t shift = (uint16_t)(1.15 * 2048.0 / 3.3);
 
+  // DEBUG NOISE ISSUE
+  amplitude_scale = amplitude_scale / 16.0;
+
   int lut_length = sizeof(sinetable)/sizeof(uint16_t);
   for (uint16_t i=0; i < lut_length; i++) {
     adjusted_sinetable[i] = (int16_t)(sinetable[i]*amplitude_scale) + shift;
@@ -216,10 +254,41 @@ void setup() {
   dma.destination(*(volatile uint16_t *)&(DAC0_DAT0L));
   dma.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
   dma.enable();
-  pinMode(A0, INPUT);
+  pinMode(Thermistor_PIN, INPUT);
 
   display.cp437(true);         // Use full 256 char 'Code Page 437' font
 
+  // assume we are starting at room temp
+  temp = 25.0;
+  desiredTemp = 65.1;
+  pinMode(PID_PIN, OUTPUT);
+  //turn the PID on
+  myPID.SetMode(AUTOMATIC);
+  myPID.SetOutputLimits(0, 255);
+  
+  /*aTune.SetControlType(1);  // PID
+  //Set the output to the desired starting frequency.
+  Output=aTuneStartValue;
+  aTune.SetNoiseBand(aTuneNoise);
+  aTune.SetOutputStep(aTuneStep);
+  aTune.SetLookbackSec((int)aTuneLookBack);*/
+
+  //Serial.println("Time(ms) Ix(mV) Temp(C) PID");
+  //Serial.println("Ix(mV) Temp(C) PID");
+  //Serial.println("Time(ms) Ix(mV) Iy(mV)");
+  Serial.println("Ix(mV) Iy(mV)");
+
+
+  // start the SPI library:
+  //SPI.begin();
+
+  // initalize the  chip select pin:
+  //pinMode(chipSelectPin, OUTPUT);
+
+
+    pinMode(Ix_PIN, INPUT);
+    pinMode(Iy_PIN, INPUT);
+  //setup_adc();
   /*display.clearDisplay();
   display.drawBitmap(64,16, logo_bmp, 128, 32, 1);*/
   delay(2000);
@@ -235,16 +304,53 @@ void loop() {
   delay(1000);*/
   
   draw_status();
-  delay(2000);
+  //delay(1000);
+  delay(100);
 }
 
+void setup_adc(){
 
+    pinMode(Ix_PIN, INPUT);
+    pinMode(Iy_PIN, INPUT);
+    adc->setAveraging(1); // set number of averages
+    adc->setResolution(12); // set bits of resolution
+
+    // it can be any of the ADC_CONVERSION_SPEED enum: VERY_LOW_SPEED, LOW_SPEED, MED_SPEED, HIGH_SPEED_16BITS, HIGH_SPEED or VERY_HIGH_SPEED
+    // see the documentation for more information
+    // additionally the conversion speed can also be ADACK_2_4, ADACK_4_0, ADACK_5_2 and ADACK_6_2,
+    // where the numbers are the frequency of the ADC clock in MHz and are independent on the bus speed.
+    adc->setConversionSpeed(ADC_CONVERSION_SPEED::HIGH_SPEED); // change the conversion speed
+    // it can be any of the ADC_MED_SPEED enum: VERY_LOW_SPEED, LOW_SPEED, MED_SPEED, HIGH_SPEED or VERY_HIGH_SPEED
+    adc->setSamplingSpeed(ADC_SAMPLING_SPEED::HIGH_SPEED); // change the sampling speed
+
+    // always call the compare functions after changing the resolution!
+    //adc->enableCompare(1.0/3.3*adc->getMaxValue(ADC_0), 0, ADC_0); // measurement will be ready if value < 1.0V
+    //adc->enableCompareRange(1.0*adc->getMaxValue(ADC_0)/3.3, 2.0*adc->getMaxValue(ADC_0)/3.3, 0, 1, ADC_0); // ready if value lies out of [1.0,2.0] V
+
+    // If you enable interrupts, notice that the isr will read the result, so that isComplete() will return false (most of the time)
+    //adc->enableInterrupts(ADC_0);
+
+
+    ////// ADC1 /////
+    adc->setAveraging(1, ADC_1); // set number of averages
+    adc->setResolution(12, ADC_1); // set bits of resolution
+    adc->setConversionSpeed(ADC_CONVERSION_SPEED::HIGH_SPEED, ADC_1); // change the conversion speed
+    adc->setSamplingSpeed(ADC_SAMPLING_SPEED::HIGH_SPEED, ADC_1); // change the sampling speed
+
+    //adc->setReference(ADC_REFERENCE::REF_1V2, ADC_1);
+
+    // always call the compare functions after changing the resolution!
+    //adc->enableCompare(1.0/3.3*adc->getMaxValue(ADC_1), 0, ADC_1); // measurement will be ready if value < 1.0V
+    //adc->enableCompareRange(1.0*adc->getMaxValue(ADC_1)/3.3, 2.0*adc->getMaxValue(ADC_1)/3.3, 0, 1, ADC_1); // ready if value lies out of [1.0,2.0] V
+
+    adc->startSynchronizedContinuous(Ix_PIN, Iy_PIN);  
+}
 
 
 void draw_status(void) {
   // read temperature
-  int adcTempValue = analogRead(A0);
-  int signalA = analogRead(A1);
+  int adcTempValue = analogRead(Thermistor_PIN);
+  //int signalA = analogRead(A1);
 
   // voltage divider with 3k resistor 1st
   //float thermistorR = 3000.0 * adcTempValue / (1023.0 - adcTempValue);
@@ -256,8 +362,39 @@ void draw_status(void) {
   // thermistor resistance @25C is 10k
   float steinhart = (1.0/b_coeff) * log(thermistorR / 10000.0);     //  1/B * ln(R/Ro)
   steinhart += 1.0 / (25.0 + 273.15); // + (1/To)
-  float temp = 1.0 / steinhart - 273.15;   // Invert and convert to Celsius
+  temp = 1.0 / steinhart - 273.15;   // Invert and convert to Celsius
+
+
+  myPID.Compute();
+  //aTune.Runtime();
+  //analogWrite(PID_PIN,Output);
+
   
+  //TODO: convert to mV, take from ADC
+  //int intensityX = analogRead(Ix_PIN);
+
+
+  //result = adc->readSynchronizedContinuous();
+  // if using 16 bits and single-ended is necessary to typecast to unsigned,
+  // otherwise values larger than 3.3/2 will be interpreted as negative
+  //result.result_adc0 = (uint16_t)result.result_adc0;
+  //result.result_adc1 = (uint16_t)result.result_adc1;
+  
+  //Serial.print(time, DEC);
+  //Serial.print(" ");
+
+  //uint16_t intensityX = result.result_adc0;
+  //uint16_t intensityY = result.result_adc1;
+  
+  // Note: max pin read value is 3.3V (though tolerant to ~5V)
+  //Serial.print(result.result_adc0*3.3/adc->getMaxValue(ADC_0), DEC);
+  //Serial.println(result.result_adc1*3.3/adc->getMaxValue(ADC_1), DEC);
+
+
+
+  int intensityX = analogRead(A1);
+  int intensityY = analogRead(A2);
+    
   display.clearDisplay();
   display.setTextSize(1);
   display.setCursor(0,0);
@@ -265,16 +402,40 @@ void draw_status(void) {
   display.print("Temp: ");
   display.print(temp);
   display.println("\xF8 C");
-  display.print("ADC: ");
-  display.println(adcTempValue);
+  //display.print("ADC: ");
+  //display.println(adcTempValue);
+  //display.print("PID Signal: ");
+  //display.println(Output);
+
   display.print("Intensity Ix: ");
-  display.println(signalA);
-
-
+  display.println(intensityX);
+  display.print("Intensity Iy: ");
+  display.println(intensityY);
 
   
   //display.print((char)248);
   display.display();
+
+  if(start_time == 0){
+    start_time = millis();  
+  }
+  //Serial.println("Time(ms) Ix(mV) Temp(C) PID");
+  //Serial.print((millis()-start_time) / 1000.0);
+  //Serial.print(' ');
+  Serial.print(intensityX);
+  Serial.print(' ');
+  Serial.println(intensityY);
+  //Serial.print(' ');
+  //Serial.print(temp);
+  //Serial.print(' ');
+  //Serial.println(Output);
+  /*Serial.print(',');
+  Serial.print(aTune.GetKp());
+  Serial.print(',');
+  Serial.print(aTune.GetKi());  
+  Serial.print(',');
+  Serial.println(aTune.GetKd());*/
+
   
   /*display.setTextSize(1);             // Normal 1:1 pixel scale
   display.setTextColor(WHITE);        // Draw white text
