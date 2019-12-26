@@ -1,7 +1,7 @@
 //#include <ADC.h>
 
 #include <PID_v1.h>
-#include <PID_AutoTune_v0.h>
+//#include <PID_AutoTune_v0.h>
 #include <SPI.h>
 
 //#define SSD1306_128_32
@@ -14,16 +14,20 @@
 
 #define Thermistor_PIN A0
 //#define Ix_PIN A1
+#define LED_PIN 13
 
 //PID Variables
 #define PID_PIN 4
 
-
+// button variables and defines
 #define BUTTON_RIGHT  0
 #define BUTTON_BOTTOM 1
 #define BUTTON_TOP    2
 #define BUTTON_LEFT   3
-
+bool buttonRightPressed = false;
+bool buttonBottomPressed = false;
+bool buttonTopPressed = false;
+bool buttonLeftPressed = false;
 
 // ADC Variables
 /*const byte CH0 = 0b10000000; //Channel select, select channel 1, unipolar mode
@@ -34,14 +38,17 @@ unsigned long finresult;*
 
 const int Ix_PIN = A1;
 const int Iy_PIN = A2;
-ADC *adc = new ADC(); // adc object
-ADC::Sync_result result;
+//ADC *adc = new ADC(); // adc object
+//ADC::Sync_result result;
 
 unsigned long start_time = 0;
+
 
 double desiredTemp, temp, Output;
 //Specify the links and initial tuning parameters
 PID myPID(&temp, &Output, &desiredTemp,8,2,0, DIRECT);
+bool isHeating = false;
+
 //PID_ATune aTune(&temp, &Output);
 //double aTuneStep=50, aTuneNoise=0.5, aTuneStartValue=255;
 //unsigned int aTuneLookBack=30;
@@ -126,7 +133,6 @@ void setup() {
     *(int16_t *)&(DAC0_DAT0L) = i;
     delay(1);
   }
-  
   // set the programmable delay block to trigger DMA requests
   SIM_SCGC6 |= SIM_SCGC6_PDB; // enable PDB clock
   PDB0_IDLY = 0; // interrupt delay register
@@ -212,7 +218,7 @@ void setup() {
   pinMode(BUTTON_LEFT, INPUT_PULLUP);
   pinMode(13, OUTPUT);
 
-  //attachInterrupt(digitalPinToInterrupt(0), button_pressed, [[CHANGE, LOW, RISING, FALLING]]);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_RIGHT), button_right_pressed, RISING);
   //attachInterrupt(digitalPinToInterrupt(1), button_pressed, [[CHANGE, LOW, RISING, FALLING]]);
   //attachInterrupt(digitalPinToInterrupt(2), button_pressed, [[CHANGE, LOW, RISING, FALLING]]);
   //attachInterrupt(digitalPinToInterrupt(3), button_pressed, [[CHANGE, LOW, RISING, FALLING]]);
@@ -223,7 +229,7 @@ void setup() {
   delay(2000);
 }
 
-void generate_dac_sine(){
+/*void generate_dac_sine(){
   unsigned long start_time = millis();
   static volatile uint16_t gen_sinetable[sizeof(sinetable)/sizeof(uint16_t)];
   int lut_length = sizeof(sinetable)/(sizeof(uint16_t)-1);
@@ -243,7 +249,7 @@ void generate_dac_sine(){
   }
   Serial.print("Generated sinetable in ");
   Serial.println(millis() - start_time);
-}
+}*/
 
 void loop() {
   
@@ -259,7 +265,7 @@ void loop() {
   delay(100);
 }
 
-void setup_adc(){
+/*void setup_adc(){
 
     pinMode(Ix_PIN, INPUT);
     pinMode(Iy_PIN, INPUT);
@@ -295,7 +301,7 @@ void setup_adc(){
     //adc->enableCompareRange(1.0*adc->getMaxValue(ADC_1)/3.3, 2.0*adc->getMaxValue(ADC_1)/3.3, 0, 1, ADC_1); // ready if value lies out of [1.0,2.0] V
 
     adc->startSynchronizedContinuous(Ix_PIN, Iy_PIN);  
-}
+}*/
 
 
 void draw_status(void) {
@@ -315,10 +321,14 @@ void draw_status(void) {
   steinhart += 1.0 / (25.0 + 273.15); // + (1/To)
   temp = 1.0 / steinhart - 273.15;   // Invert and convert to Celsius
 
-
-  myPID.Compute();
-  //aTune.Runtime();
-  analogWrite(PID_PIN,(int)Output);
+  if(isHeating){
+    myPID.Compute();
+    //aTune.Runtime();
+    analogWrite(PID_PIN,(int)Output);
+  } else {
+    Output = (int)0;
+    analogWrite(PID_PIN,0);
+  }
 
   
   //TODO: convert to mV, take from ADC
@@ -387,7 +397,7 @@ void draw_status(void) {
   display.println(intensityY);
   display.print("Time: ");
   display.print(current_time_str);
-  display.drawLine(100, 2,100, 30, 1);
+  //display.drawLine(100, 2,100, 30, 1);
 
 
   if (buttonTop == HIGH) { // button2 is top
@@ -413,6 +423,13 @@ void draw_status(void) {
   //display.print((char)248);
   display.display();
 
+
+  // handle any presses
+  if(buttonRightPressed){
+    buttonRightPressed = false; 
+    isHeating = !isHeating;
+    digitalWrite(LED_PIN, isHeating ? HIGH : LOW);
+  }
 
   //Serial.println("Time(ms) Ix(mV) Temp(C) PID");
   //Serial.print((millis()-start_time) / 1000.0);
@@ -460,6 +477,16 @@ void draw_status(void) {
   display.display();*/
 }
 
-//void button_pressed() {
-//  state = !state;
-//}
+
+void button_right_pressed() {
+  buttonRightPressed = true;
+}
+void button_left_pressed() {
+  buttonLeftPressed = true;
+}
+void button_top_pressed() {
+  buttonTopPressed = true;
+}
+void button_bottom_pressed() {
+  buttonBottomPressed = true;
+}
