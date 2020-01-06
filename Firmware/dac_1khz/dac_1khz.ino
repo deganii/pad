@@ -398,12 +398,14 @@ void draw_status(void) {
     start_time = millis();  
   }
   
-  unsigned long curent_time  = (millis() - start_time) / 1000;
+  unsigned long global_time  = millis() - start_time;
+  unsigned long curent_time  = global_time;
+  unsigned long current_time_sec = curent_time / 1000;
   static char current_time_str[8];
-  long h = curent_time / 3600;
-  curent_time = curent_time % 3600;
-  int m = curent_time / 60;
-  int s = curent_time % 60;
+  long h = current_time_sec / 3600;
+  current_time_sec = current_time_sec % 3600;
+  int m = current_time_sec / 60;
+  int s = current_time_sec % 60;
   sprintf(current_time_str, "%02ld:%02d:%02d", h, m, s);
 
   
@@ -469,8 +471,8 @@ void draw_status(void) {
   }
 
   //Serial.println("Time(ms) Ix(mV) Temp(C) PID");
-  //Serial.print((millis()-start_time) / 1000.0);
-  //Serial.print(' ');
+  Serial.print(global_time / 1000.0);
+  Serial.print(' ');
   Serial.print(intensityX);
   Serial.print(' ');
   Serial.print(intensityY);
@@ -478,6 +480,19 @@ void draw_status(void) {
   Serial.print(temp);
   Serial.print(' ');
   Serial.println((int)Output);
+  int incomingByte = 0;
+  if (Serial.available() > 0) {
+    // read the incoming byte:
+    incomingByte = Serial.read();
+    
+    // clock reset request
+    if(incomingByte == 'r'){
+      start_time = millis();
+    }
+    
+  }
+
+  
   /*Serial.print(' ');
   /*Serial.print(aTune.GetKp());
   Serial.print(',');
