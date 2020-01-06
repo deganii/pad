@@ -66,6 +66,10 @@ class SerialModule:
             # tell the UI that a full set of data is not yet received...
             return np.nan in self.data['t']
 
+    def get_raw_intensity(self):
+        with self.data_lock:
+            return (self.data['i_x'][-1], self.data['i_y'][-1])
+
     def backgroundThread(self):  # retrieve data
         time.sleep(0.2)  # give some time for the arduino clock to reset
         self.serialConnection.reset_input_buffer()

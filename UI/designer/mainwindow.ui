@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>866</width>
-    <height>583</height>
+    <height>705</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -178,7 +178,7 @@
       <property name="minimumSize">
        <size>
         <width>260</width>
-        <height>0</height>
+        <height>400</height>
        </size>
       </property>
       <property name="title">
@@ -224,16 +224,6 @@
        </property>
        <property name="text">
         <string>Sampling Rate:</string>
-       </property>
-      </widget>
-      <widget class="QLCDNumber" name="lcdNumber">
-       <property name="geometry">
-        <rect>
-         <x>180</x>
-         <y>310</y>
-         <width>64</width>
-         <height>23</height>
-        </rect>
        </property>
       </widget>
       <widget class="QLabel" name="labelNumSamples">
@@ -523,13 +513,14 @@
        <property name="geometry">
         <rect>
          <x>20</x>
-         <y>310</y>
-         <width>89</width>
-         <height>23</height>
+         <y>440</y>
+         <width>231</width>
+         <height>61</height>
         </rect>
        </property>
        <property name="text">
-        <string>Start Experiment</string>
+        <string>Start
+Experiment</string>
        </property>
       </widget>
       <widget class="QSlider" name="sliderNumSamples">
@@ -576,10 +567,142 @@
         </rect>
        </property>
       </widget>
+      <widget class="QPushButton" name="buttonAutoReference">
+       <property name="geometry">
+        <rect>
+         <x>138</x>
+         <y>360</y>
+         <width>111</width>
+         <height>51</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Auto-Set
+Reference</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="buttonManualReference">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>360</y>
+         <width>111</width>
+         <height>51</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Manually Set
+Reference</string>
+       </property>
+      </widget>
+      <widget class="QProgressBar" name="progressBar">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>510</y>
+         <width>231</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="value">
+        <number>0</number>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_2">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>300</y>
+         <width>111</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Reference (Ix)</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_3">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>330</y>
+         <width>111</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Reference (Iy)</string>
+       </property>
+      </widget>
+      <widget class="Line" name="line_3">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>410</y>
+         <width>231</width>
+         <height>20</height>
+        </rect>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_4">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>540</y>
+         <width>111</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Time Remaining:</string>
+       </property>
+      </widget>
+      <widget class="QSpinBox" name="textRefX">
+       <property name="geometry">
+        <rect>
+         <x>130</x>
+         <y>300</y>
+         <width>111</width>
+         <height>22</height>
+        </rect>
+       </property>
+       <property name="maximum">
+        <number>1024</number>
+       </property>
+      </widget>
+      <widget class="QSpinBox" name="textRefY">
+       <property name="geometry">
+        <rect>
+         <x>130</x>
+         <y>330</y>
+         <width>111</width>
+         <height>22</height>
+        </rect>
+       </property>
+       <property name="maximum">
+        <number>1024</number>
+       </property>
+      </widget>
      </widget>
     </item>
     <item>
-     <layout class="QGridLayout" name="gridGraphs"/>
+     <layout class="QGridLayout" name="gridGraphs">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+     </layout>
     </item>
    </layout>
   </widget>

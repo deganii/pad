@@ -4,13 +4,13 @@ import signal
 import traceback
 
 import numpy as np
-
+import matplotlib
 from matplotlib.backends.qt_compat import QtCore, QtWidgets, QtGui
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from PyQt5 import uic
-from PyQt5.QtWidgets import QGridLayout
-
+from PyQt5.QtWidgets import QGridLayout, QPushButton, QLineEdit, QSpinBox
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from matplotlib.figure import Figure
 
 from SerialModule import SerialModule
@@ -23,14 +23,10 @@ class PadMainWindow(QtWidgets.QMainWindow):
         self.serialConnection = serialConnection
         uic.loadUi('c:/dev/pad/ui/designer/mainwindow.ui', self)
 
-        # self._main = QtWidgets.QWidget()
-        # self.setCentralWidget(self._main)
-        # layout = QtWidgets.QVBoxLayout(self._main)
-
-        # get the gridlayout
+        # get the gridlayout for the plots
         layout = self.findChild(QGridLayout, "gridGraphs")
 
-        raw_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+        raw_canvas = FigureCanvas(Figure(figsize=(5,3)))
         layout.addWidget(raw_canvas)
 
         raw_ax = raw_canvas.figure.subplots()
@@ -46,7 +42,7 @@ class PadMainWindow(QtWidgets.QMainWindow):
         raw_ax.legend()
         self._raw_ax = raw_ax
 
-        temp_canvas = FigureCanvas(Figure(figsize=(5, 3)))
+        temp_canvas = FigureCanvas(Figure(figsize=(5,3)))
         layout.addWidget(temp_canvas)
         temp_ax = temp_canvas.figure.subplots()
         pid_ax = temp_ax.twinx()
@@ -60,22 +56,30 @@ class PadMainWindow(QtWidgets.QMainWindow):
         temp_ax.set_title('Temperature Monitor (°C)')
         temp_ax.set_xlim(0, 15)
         temp_ax.set_ylim(10,85)
-        pid_ax.set_ylim(-20,300)
+        pid_ax.set_ylim(-20,350)
         temp_ax.legend(loc='upper left')
         pid_ax.legend(loc='upper right')
         self._temp_ax = temp_ax
+
+        temp_canvas.figure.subplots_adjust(bottom=0.2)
+        raw_canvas.figure.subplots_adjust(bottom=0.2)
+
+        buttonAutoReference = self.findChild(QPushButton, "buttonAutoReference")
+        buttonAutoReference.clicked.connect(self.on_auto_reference)
+        self.textRefX = self.findChild(QSpinBox, "textRefX")
+        self.textRefY = self.findChild(QSpinBox, "textRefY")
 
         self._timer = temp_canvas.new_timer(
             100, [(self._update_canvas, (), {})])
         self._timer.start()
 
     def _update_canvas(self):
-        dataFull = self.serialConnection.updatePlotData(
+        dataPartial = self.serialConnection.updatePlotData(
             self._raw_ax, self.i_x, self.i_y,
             self._temp_ax, self.temp, self.pid_ctrl)
         self._raw_ax.relim()
         self._temp_ax.relim()
-        if dataFull:
+        if dataPartial: # avoid autoscaling the X-axis if we don't have enough datapoints
             self._raw_ax.autoscale_view(True, False, True)
             self._temp_ax.autoscale_view(True, False, True)
         else:
@@ -85,6 +89,14 @@ class PadMainWindow(QtWidgets.QMainWindow):
             self._temp_ax.autoscale_view(True, True, False)
         self._temp_ax.figure.canvas.draw()
         self._raw_ax.figure.canvas.draw()
+
+
+    @pyqtSlot()
+    def on_auto_reference(self):
+        # get latest
+        (x,y) = self.serialConnection.get_raw_intensity()
+        self.textRefX.setValue(x)
+        self.textRefY.setValue(y)
 
 if __name__ == "__main__":
     s = None
@@ -97,7 +109,8 @@ if __name__ == "__main__":
         signal.signal(signal.SIGTERM, exit_gracefully)
 
         # matplotlib.rcParams['toolbar'] = 'None'
-        sns.set(style="darkgrid")
+        sns.set(style="darkgrid", font_scale=0.85)
+        # matplotlib.rcParams.update({'font.size': 12})
 
         s = SerialModule()
         s.readSerialStart()
