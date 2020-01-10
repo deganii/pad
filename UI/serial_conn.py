@@ -7,7 +7,8 @@ import numpy as np
 import signal
 import traceback
 import signal
-
+import csv
+import os
 #
 class SerialModule:
     def __init__(self, serialPort=None,
@@ -16,16 +17,14 @@ class SerialModule:
         self.baud = serialBaud
         self.dataLength = dataLength
         self.rawdata = []
-        self.data = {'i_x': deque([np.nan] * dataLength, dataLength),
-                     'i_y': deque([np.nan] * dataLength, dataLength),
-                     'pid_ctrl': deque([np.nan] * dataLength, dataLength),
-                     'temp': deque([np.nan] * dataLength, dataLength),
-                     't':deque([np.nan] * dataLength, dataLength)}
+        self.init_data()
         self.isConnected = False
         self.isRunning = False
+        self.isLogging = False
         self.thread = None
         self.data_lock = Lock()
         self.start_time_s = time.time()
+        self.callback = None
 
         if self.port is None:
             print('Determining Port and Baud rate')
@@ -38,7 +37,11 @@ class SerialModule:
             print('Connected to ' + str(self.port) + ' at ' + str(serialBaud) + ' BAUD.')
             # reset the arduino clock
             self.serialConnection.write(b'r')
-        except:
+            self.set_heating(False)
+            self.set_led(False)
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
             print("Failed to connect with " + str(self.port) + ' at ' + str(serialBaud) + ' BAUD.')
             self.isConnected = False
 
@@ -48,6 +51,49 @@ class SerialModule:
             if "Teensy" in port.description:
                 return port.device
         raise Exception("Could not find a suitable (Teensy 3.2) micro-controller!")
+
+    def init_data(self):
+        self.data = {'i_x': deque([np.nan] * self.dataLength, self.dataLength),
+             'i_y': deque([np.nan] * self.dataLength, self.dataLength),
+             'pid_ctrl': deque([np.nan] * self.dataLength, self.dataLength),
+             'temp': deque([np.nan] * self.dataLength, self.dataLength),
+             't': deque([np.nan] * self.dataLength, self.dataLength)}
+
+    def reset_mcu_clock(self):
+        # reset the arduino clock
+        self.serialConnection.write(b'r')
+        # give it some time to reset
+        time.sleep(0.2)
+        with self.data_lock:
+            self.init_data()
+
+    def set_heating(self, isHeating):
+        self.serialConnection.write(b'H' if isHeating else b'h')
+        self.isHeating = isHeating
+
+    def set_led(self, isIlluminating):
+        self.serialConnection.write(b'L' if isIlluminating else b'l')
+        self.isIlluminating = isIlluminating
+
+    def start_logging(self, filename, callback):
+        with self.data_lock:
+            if os.path.exists(filename):
+                append_write = 'a'  # append if already exists
+            else:
+                append_write = 'w'  # make a new file if not
+            fields = ['t', 'i_x', 'i_y', 'temp',  'pid_ctrl']
+            self.logfile = open(filename, append_write, newline='')
+            self.writer = csv.writer(self.logfile)
+            self.writer.writerow(fields)
+            self.callback = callback
+            self.isLogging = True
+
+    def stop_logging(self):
+        with self.data_lock:
+            self.logfile.close()
+            self.writer = self.logfile = None
+            self.callback = None
+            self.isLogging = False
 
     def readSerialStart(self):
         if self.isConnected and self.thread == None:
@@ -78,11 +124,16 @@ class SerialModule:
                 while self.serialConnection.in_waiting:
                     line = self.serialConnection.readline()
                     values = [float(v) for v in line.split()]
-                    self.data['t'].append(values[0])
-                    self.data['i_x'].append(values[1])
-                    self.data['i_y'].append(values[2])
-                    self.data['temp'].append(values[3])
-                    self.data['pid_ctrl'].append(values[4])
+                    t, i_x, i_y, temp, pid_ctrl = values
+                    self.data['t'].append(t)
+                    self.data['i_x'].append(i_x)
+                    self.data['i_y'].append(i_y)
+                    self.data['temp'].append(temp)
+                    self.data['pid_ctrl'].append(pid_ctrl)
+                    if self.isLogging:
+                        self.writer.writerow(values)
+                    if self.callback is not None:
+                        self.callback(t, i_x, i_y, temp, pid_ctrl)
             time.sleep(0.1)
 
     def close(self):

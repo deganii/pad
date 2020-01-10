@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>866</width>
-    <height>705</height>
+    <width>1266</width>
+    <height>805</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -509,17 +509,17 @@
         <string>Sample Every: </string>
        </property>
       </widget>
-      <widget class="QPushButton" name="buttonStart">
+      <widget class="QPushButton" name="buttonStartDiscrete">
        <property name="geometry">
         <rect>
-         <x>20</x>
+         <x>140</x>
          <y>440</y>
-         <width>231</width>
+         <width>111</width>
          <height>61</height>
         </rect>
        </property>
        <property name="text">
-        <string>Start
+        <string>Start Discrete
 Experiment</string>
        </property>
       </widget>
@@ -536,16 +536,19 @@ Experiment</string>
         <number>10</number>
        </property>
        <property name="maximum">
-        <number>1000</number>
+        <number>100</number>
        </property>
        <property name="singleStep">
         <number>10</number>
        </property>
        <property name="pageStep">
-        <number>100</number>
+        <number>20</number>
        </property>
        <property name="value">
-        <number>100</number>
+        <number>10</number>
+       </property>
+       <property name="sliderPosition">
+        <number>10</number>
        </property>
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
@@ -554,10 +557,10 @@ Experiment</string>
         <enum>QSlider::TicksBelow</enum>
        </property>
        <property name="tickInterval">
-        <number>100</number>
+        <number>10</number>
        </property>
       </widget>
-      <widget class="QLineEdit" name="textName">
+      <widget class="QLineEdit" name="textExpName">
        <property name="geometry">
         <rect>
          <x>114</x>
@@ -565,6 +568,12 @@ Experiment</string>
          <width>133</width>
          <height>20</height>
         </rect>
+       </property>
+       <property name="inputMask">
+        <string/>
+       </property>
+       <property name="placeholderText">
+        <string>i.e. &quot;Staph Test&quot;</string>
        </property>
       </widget>
       <widget class="QPushButton" name="buttonAutoReference">
@@ -686,6 +695,36 @@ Reference</string>
         <number>1024</number>
        </property>
       </widget>
+      <widget class="QLabel" name="label_5">
+       <property name="geometry">
+        <rect>
+         <x>30</x>
+         <y>570</y>
+         <width>191</width>
+         <height>171</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="pixmap">
+        <pixmap>system_192x192.png</pixmap>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="buttonStartContinuous">
+       <property name="geometry">
+        <rect>
+         <x>20</x>
+         <y>440</y>
+         <width>111</width>
+         <height>61</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Start Continuous
+Experiment</string>
+       </property>
+      </widget>
      </widget>
     </item>
     <item>
@@ -711,7 +750,7 @@ Reference</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>866</width>
+     <width>1266</width>
      <height>21</height>
     </rect>
    </property>
@@ -721,12 +760,75 @@ Reference</string>
     </property>
     <addaction name="actionExit"/>
    </widget>
+   <widget class="QMenu" name="menuTools">
+    <property name="title">
+     <string>Tools</string>
+    </property>
+    <widget class="QMenu" name="menuLED">
+     <property name="title">
+      <string>LED...</string>
+     </property>
+     <addaction name="actionLEDOn"/>
+     <addaction name="actionLEDOff"/>
+    </widget>
+    <widget class="QMenu" name="menuHeating">
+     <property name="title">
+      <string>Heating...</string>
+     </property>
+     <addaction name="actionHeatingOn"/>
+     <addaction name="actionHeatingOff"/>
+    </widget>
+    <addaction name="actionReset_MCU_Clock"/>
+    <addaction name="menuHeating"/>
+    <addaction name="menuLED"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuTools"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionExit">
    <property name="text">
     <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionReset_MCU_Clock">
+   <property name="text">
+    <string>Reset MCU Clock</string>
+   </property>
+  </action>
+  <action name="actionTurn_LED_On">
+   <property name="text">
+    <string>Turn LED On</string>
+   </property>
+  </action>
+  <action name="actionTurn_LED_Off">
+   <property name="text">
+    <string>Turn LED Off</string>
+   </property>
+  </action>
+  <action name="actionStop_Heating">
+   <property name="text">
+    <string>Stop Heating</string>
+   </property>
+  </action>
+  <action name="actionLEDOn">
+   <property name="text">
+    <string>On</string>
+   </property>
+  </action>
+  <action name="actionLEDOff">
+   <property name="text">
+    <string>Off</string>
+   </property>
+  </action>
+  <action name="actionHeatingOn">
+   <property name="text">
+    <string>On</string>
+   </property>
+  </action>
+  <action name="actionHeatingOff">
+   <property name="text">
+    <string>Off</string>
    </property>
   </action>
  </widget>
@@ -793,6 +895,22 @@ Reference</string>
     <hint type="destinationlabel">
      <x>155</x>
      <y>200</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>sliderNumSamples</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>labelNumSamples</receiver>
+   <slot>setNum(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>194</x>
+     <y>245</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>160</x>
+     <y>265</y>
     </hint>
    </hints>
   </connection>

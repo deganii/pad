@@ -192,7 +192,7 @@ void setup() {
   pinMode(PID_PIN, OUTPUT);
   //turn the PID on
   myPID.SetMode(AUTOMATIC);
-  myPID.SetOutputLimits(0, 255);
+  myPID.SetOutputLimits(0, 256);
   
   /*aTune.SetControlType(1);  // PID
   //Set the output to the desired starting frequency.
@@ -480,8 +480,10 @@ void draw_status(void) {
   Serial.print(temp);
   Serial.print(' ');
   Serial.println((int)Output);
+
+  // read any requests from the USB Host
   int incomingByte = 0;
-  if (Serial.available() > 0) {
+  while (Serial.available() > 0) {
     // read the incoming byte:
     incomingByte = Serial.read();
     
@@ -489,7 +491,31 @@ void draw_status(void) {
     if(incomingByte == 'r'){
       start_time = millis();
     }
+
+    // Led off
+    else if(incomingByte == 'l'){
+        if(isIlluminating){
+          disable_dac_sine();
+          isIlluminating = false;
+        }
+    }
+    // Led on
+    else if(incomingByte == 'L'){
+        if(!isIlluminating){
+          enable_dac_sine();
+          isIlluminating = true;
+        }
+    }
+
+    // Heat off
+    else if(incomingByte == 'h'){
+      isHeating = false;
+    }
     
+    // Heat on
+    else if(incomingByte == 'H'){
+      isHeating = true;
+    }
   }
 
   
