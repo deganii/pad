@@ -1,4 +1,4 @@
-from threading import Thread, Lock
+from threading import Thread, Lock, RLock
 import serial
 import time
 from collections import deque
@@ -22,7 +22,7 @@ class SerialModule:
         self.isRunning = False
         self.isLogging = False
         self.thread = None
-        self.data_lock = Lock()
+        self.data_lock = RLock()
         self.start_time_s = time.time()
         self.callback = None
 
@@ -70,10 +70,12 @@ class SerialModule:
     def set_heating(self, isHeating):
         self.serialConnection.write(b'H' if isHeating else b'h')
         self.isHeating = isHeating
+        time.sleep(0.2)
 
     def set_led(self, isIlluminating):
         self.serialConnection.write(b'L' if isIlluminating else b'l')
         self.isIlluminating = isIlluminating
+        time.sleep(0.2)
 
     def start_logging(self, filename, callback):
         with self.data_lock:
@@ -90,7 +92,8 @@ class SerialModule:
 
     def stop_logging(self):
         with self.data_lock:
-            self.logfile.close()
+            if self.logfile is not None:
+                self.logfile.close()
             self.writer = self.logfile = None
             self.callback = None
             self.isLogging = False
@@ -103,13 +106,16 @@ class SerialModule:
 
     def updatePlotData(self, raw_ax, i_x, i_y, temp_ax, temp, pid_ctrl):
         # move raw serial data into the matplotlib drawing objects
+        # print('Starting updatePlotData')
         with self.data_lock:
+            # print('Processing updatePlotData')
             i_x.set_data(self.data['t'], self.data['i_x'])
             i_y.set_data(self.data['t'], self.data['i_y'])
             pid_ctrl.set_data(self.data['t'], self.data['pid_ctrl'])
             temp.set_data(self.data['t'], self.data['temp'])
             temp_ax.set_title('Temperature Monitor ({0:.2f}°C)'.format(self.data['temp'][-1]))
             # tell the UI that a full set of data is not yet received...
+            # print('Completed updatePlotData\n')
             return np.nan in self.data['t']
 
     def get_raw_intensity(self):
@@ -121,7 +127,9 @@ class SerialModule:
         self.serialConnection.reset_input_buffer()
         while self.isRunning:
             with self.data_lock:
+                # print('Starting backgroundThread')
                 while self.serialConnection.in_waiting:
+                    # print('Processing backgroundThread')
                     line = self.serialConnection.readline()
                     values = [float(v) for v in line.split()]
                     t, i_x, i_y, temp, pid_ctrl = values
@@ -134,6 +142,7 @@ class SerialModule:
                         self.writer.writerow(values)
                     if self.callback is not None:
                         self.callback(t, i_x, i_y, temp, pid_ctrl)
+                # print('Completed backgroundThread\n')
             time.sleep(0.1)
 
     def close(self):
