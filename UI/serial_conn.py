@@ -9,6 +9,7 @@ import traceback
 import signal
 import csv
 import os
+import inspect
 #
 class SerialModule:
     def __init__(self, serialPort=None,

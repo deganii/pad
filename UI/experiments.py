@@ -45,7 +45,7 @@ class DiscreteExperiment:
 
     # called by UI timer thread when the UI wants an updated plot
     def draw_plot(self, ax):
-        if self.measurements_completed >= 0:
+        if self.measurements_completed > 0:
             # print('Started Exp draw_plot')
             with self.data_lock:
                 # print('Processing Exp draw_plot')
@@ -57,7 +57,7 @@ class DiscreteExperiment:
                     msmt_avgs[i] = np.mean(self.exp_data[i]['pa_delta_r'])
                     msmt_stds[i] = np.std(self.exp_data[i]['pa_delta_r'])
                 sns.barplot(x=list(range(1,self.measurements_completed+1)),
-                            y=msmt_avgs, palette="Blues_d",
+                            y=msmt_avgs, palette="Greens_d",
                             ax=ax, yerr=msmt_stds)
                 ax.set_title(self.name + ' (Untitled)' if self.name == 'Experiment' else self.name)
                 # ax.set_title('Anisotropy (\Delta r$ = {1})')

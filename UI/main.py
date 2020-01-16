@@ -1,8 +1,11 @@
+import inspect
 import sys,os
 import time
 import signal
 import traceback
 import logging
+
+import datetime
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler(stream=sys.stdout)
@@ -16,7 +19,8 @@ from matplotlib.backends.qt_compat import QtCore, QtWidgets, QtGui
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from PyQt5 import uic
-from PyQt5.QtWidgets import QGridLayout, QPushButton, QLineEdit, QSpinBox, QMessageBox, QAction
+from PyQt5.QtWidgets import QGridLayout, QPushButton, QLineEdit, QSpinBox, QMessageBox, QAction, QToolBar, QLabel, \
+    QProgressBar, QWidget, QSizePolicy, QSlider
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from matplotlib.figure import Figure
 
@@ -104,18 +108,41 @@ class PadMainWindow(QtWidgets.QMainWindow):
 
         buttonAutoReference = self.findChild(QPushButton, "buttonAutoReference")
         buttonAutoReference.clicked.connect(self.on_auto_reference)
-
-        actionHeatingOn = self.findChild(QAction, "actionHeatingOn")
-        actionHeatingOn.triggered.connect(self.on_heating_on)
-        actionHeatingOff = self.findChild(QAction, "actionHeatingOff")
-        actionHeatingOff.triggered.connect(self.on_heating_off)
-        actionLEDOn = self.findChild(QAction, "actionLEDOn")
-        actionLEDOn.triggered.connect(self.on_led_on)
-        actionLEDOff = self.findChild(QAction, "actionLEDOff")
-        actionLEDOff.triggered.connect(self.on_led_off)
+        self.toolBar = self.findChild(QToolBar, "toolBar")
+        widgetSpacer = QWidget()
+        widgetSpacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding,)
+        self.progressBar = QProgressBar(self);
+        self.progressBar.setValue(0)
+        self.progressBar.setFixedWidth(150)
+        self.progressBar.setDisabled(True)
+        self.toolBar.addWidget(widgetSpacer)
+        self.labelEstimatedTime = QLabel("Estimated Time To Run Experiment: ")
+        self.labelExperimentTime = QLabel()
+        self.toolBar.addWidget(self.labelEstimatedTime)
+        self.toolBar.addWidget(self.labelExperimentTime)
+        widgetSpacer2 = QWidget()
+        widgetSpacer2.setFixedWidth(15)
+        self.toolBar.addWidget(widgetSpacer2)
+        self.toolBar.addWidget(self.progressBar)
+        self.styleTemplate = '<html><head/><body><p><span style=" font-size:12pt; font-weight:600; color:#666666">{0}</span></p></body></html>'
+        self.summaryStyleTemplate = '<html><head/><body><p><span style=" font-style:italic;">[{0} Samplings Per Measurement]</span></p></body></html>'
+        self.actionHeater = self.findChild(QAction, "actionHeater")
+        self.actionHeater.triggered.connect(self.on_heating)
+        self.actionLED = self.findChild(QAction, "actionLED")
+        self.actionLED.triggered.connect(self.on_led)
+        self.actionResetMCUClock = self.findChild(QAction, "actionResetMCUClock")
+        self.actionResetMCUClock.triggered.connect(self.on_mcu_reset)
 
         self.buttonStartDiscrete = self.findChild(QPushButton, "buttonStartDiscrete")
         self.buttonStartDiscrete.clicked.connect(self.on_start_discrete)
+
+        for name, obj in inspect.getmembers(self):
+            if isinstance(obj, QSlider):
+                setattr(self, name, obj)
+                obj.valueChanged.connect(self._update_estimated_time)
+        self._update_estimated_time()
+        self.labelSamplingSummary = self.findChild(QLabel, "labelSamplingSummary")
+
 
         self.textRefX = self.findChild(QSpinBox, "textRefX")
         self.textRefY = self.findChild(QSpinBox, "textRefY")
@@ -147,18 +174,19 @@ class PadMainWindow(QtWidgets.QMainWindow):
         layout.addWidget(exp_canvas, 1, 2)
         exp_ax = exp_canvas.figure.subplots()
         placehldr_exp = np.asarray([15,7,3.2,1.1,0.4,0.1])
-        placehldr_err = np.asarray([3.4, 1.5, 0.5,0.5,0.2,0.1])
+        # placehldr_err = np.asarray([3.4, 1.5, 0.5,0.5,0.2,0.1])
         sns.barplot(x=list(range(placehldr_exp.shape[0])),
                          y=placehldr_exp, color='lightsteelblue',
-                         ax=exp_ax, yerr=placehldr_err, capsize=0.2)
-        exp_ax.set_title('PA Experiment Placeholder')
+                         ax=exp_ax)
+        exp_ax.set_title('Anisotropy Experiment Placeholder')
         exp_ax.set_xlabel("Measurement ID (n)")
         exp_ax.set_ylabel("$\Delta r$")
-        bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.6)
+        bbox_props = dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9)
         # with matplotlib.rc_context({"lines.linewidth": 0.5}):
-        exp_ax.text(2.5, 8, "Placeholder", ha="center", va="center", size=20,
+        exp_ax.text(2.5, 8, "Click\n'Start Experiment'\nTo Begin", ha="center", va="center", size=20,
                     bbox=bbox_props, color='steelblue')
         self._exp_ax = exp_ax
+        self.exp_canvas = exp_canvas
 
         offsets = {'bottom':0.2, 'left':0.17, 'right':0.87}
         offsets_t = {'bottom': 0.2, 'left': 0.17, 'right': 1.0}
@@ -176,6 +204,8 @@ class PadMainWindow(QtWidgets.QMainWindow):
         self._timer = temp_canvas.new_timer(
             100, [(self._update_canvas, (), {})])
         self._timer.start()
+
+
 
     def _redraw(self, ax, partial, scale_y=True):
         ax.relim()
@@ -255,6 +285,7 @@ class PadMainWindow(QtWidgets.QMainWindow):
             self.pa_noise.set_yticklabels([])
             self.pa_noise.set_xticks([])
             self.pa_noise.set_xticklabels([])
+            self.pa_noise.set_xlabel("$({0:.2f})$".format(np.std(dist_pa)))
 
             # Don't show ticks above 100%
             # pid_yticks = ax.yaxis.get_major_ticks()
@@ -263,6 +294,7 @@ class PadMainWindow(QtWidgets.QMainWindow):
             # TODO: add logic to only redraw when data changes...
             if self.experiment_running:
                 self.experiment.draw_plot(self._exp_ax)
+                self.update_time_remaining()
                 if self.experiment.is_complete():
                     self.stop_experiment()
                     # self.experiment_running = False
@@ -277,6 +309,8 @@ class PadMainWindow(QtWidgets.QMainWindow):
                     msg.buttonClicked.connect(self.on_finished_discrete)
                     msg.show()
                 elif self.experiment.waiting_new_sample() and not self.prompting:
+                    # save the updated plot
+                    self.exp_canvas.figure.savefig(self.experiment.root + 'plot.png')
                     self.prompt_next_measurement()
             self._redraw(self._pa_ax, partial=dataPartial)
             self._redraw(self._temp_ax, partial=dataPartial, scale_y=False)
@@ -285,12 +319,37 @@ class PadMainWindow(QtWidgets.QMainWindow):
             self._redraw(self._pa_noise_ax, partial=dataPartial)
             self._redraw(self._exp_ax, partial=True)
 
-            # TODO: initiate next measurement here
             
 
         except Exception as e:
             print(e)
             traceback.print_exc()
+
+    def pretty_time_delta(self,seconds):
+        seconds = int(seconds)
+        days, seconds = divmod(seconds, 86400)
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        # return '{0:2d}:{1:2d}:{2:2d}'.format(hours, minutes, seconds)
+        if days > 0:
+            return '%d days, %d hrs'%(days, hours)
+        elif hours > 0:
+            return '%d hr, %d min'%(hours, minutes)
+        elif minutes > 0:
+            return '%d mins' % minutes
+        else:
+            return '%d secs' % seconds
+
+    @pyqtSlot()
+    def _update_estimated_time(self):
+        measureTimeSeconds = self.sliderDuration.value()
+        self.experimentTimeSeconds = measureTimeSeconds * self.sliderNumMeasurements.value()
+        timeTemplate = self.styleTemplate.format("Estimated Time To Run Experiment: {0}")
+        self.labelEstimatedTime.setText(timeTemplate.format(
+            self.pretty_time_delta(self.experimentTimeSeconds)))
+        numSamples = int(1000.0*measureTimeSeconds / float(self.sliderSampleRate.value()))
+        self.labelSamplingSummary.setText(self.summaryStyleTemplate.format(numSamples))
+
 
     @pyqtSlot()
     def on_auto_reference(self):
@@ -300,22 +359,16 @@ class PadMainWindow(QtWidgets.QMainWindow):
         self.textRefY.setValue(y)
 
     @pyqtSlot()
-    def on_led_on(self):
-        self.serialConnection.set_led(isIlluminating=True)
+    def on_mcu_reset(self):
+        self.serialConnection.reset_mcu_clock()
 
-    @pyqtSlot()
-    def on_led_off(self):
-        self.serialConnection.set_led(isIlluminating=False)
+    @pyqtSlot(bool)
+    def on_led(self, checked):
+        self.serialConnection.set_led(isIlluminating=checked)
 
-    @pyqtSlot()
-    def on_heating_on(self):
-        self.serialConnection.set_heating(isHeating=True)
-
-    @pyqtSlot()
-    def on_heating_off(self):
-        self.serialConnection.set_heating(isHeating=False)
-
-
+    @pyqtSlot(bool)
+    def on_heating(self, checked):
+        self.serialConnection.set_heating(isHeating=checked)
 
     @pyqtSlot()
     def on_start_discrete(self):
@@ -332,16 +385,42 @@ class PadMainWindow(QtWidgets.QMainWindow):
             exp_dir = '../Experiments/{0}_{1}/'.format(exp_name, timestr)
             os.makedirs(exp_dir, exist_ok=True)
             #self.experiment = DiscreteExperiment(exp_name, exp_dir)
+            samplesPerMeasurement = int(1000.0*float(self.sliderDuration.value()) /
+                                        float(self.sliderSampleRate.value()))
             self.experiment = DiscreteExperiment(exp_name, exp_dir,
-                self.textRefX.value(), self.textRefY.value())
+                self.textRefX.value(), self.textRefY.value(),
+                    num_measurements=self.sliderNumMeasurements.value(),
+                    samples_per_measurement=samplesPerMeasurement)
             self.serialConnection.start_logging(
                 exp_dir + 'raw.csv', self.experiment.on_new_data)
             self.experiment_running = True
             self.buttonStartDiscrete.setText(
                 self.buttonStartDiscrete.text().replace('Start', 'Stop'))
+            self.experiment_start = datetime.datetime.now()
+            self.experiment_end = datetime.datetime.now() + datetime.timedelta(
+                seconds=self.experimentTimeSeconds)
+
+            # self.labelEstimatedTime.hide() #setVisible(False)
+            self.labelEstimatedTime.setText('')
+            # self.labelExperimentTime.show() #.setVisible(True)
+            # self.progressBar.show() # setVisible(True)
+            self.progressBar.setEnabled(True)
+            self.update_time_remaining()
+
             self.prompt_next_measurement()
 
-
+    def update_time_remaining(self):
+        timeLeft = self.experiment_end - datetime.datetime.now()
+        totalSeconds = timeLeft.seconds
+        hours, remainder = divmod(totalSeconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        timeLeftStr = 'Estimated Time Remaining: '
+        if hours > 0:
+            timeLeftStr += "{0:02d}:{1:02d}:{2:02d}".format(hours, minutes, seconds)
+        else:
+            timeLeftStr += "{0:02d}:{1:02d}".format(minutes, seconds)
+        self.labelExperimentTime.setText(self.styleTemplate.format(timeLeftStr))
+        self.progressBar.setValue(100 - int(100.0 * timeLeft.seconds / self.experimentTimeSeconds))
 
     @pyqtSlot()
     def on_finished_discrete(self):
@@ -353,6 +432,12 @@ class PadMainWindow(QtWidgets.QMainWindow):
         self.experiment.stop_measurement()
         self.buttonStartDiscrete.setText(
             self.buttonStartDiscrete.text().replace('Stop', 'Start'))
+        # self.labelEstimatedTime.setVisible(True)
+        # self.labelExperimentTime.setVisible(False)
+        self.labelExperimentTime.setText('')
+        self._update_estimated_time()
+        self.progressBar.setDisabled(True)
+        self.progressBar.setValue(0)
         self.experiment_running = False
         self.experiment = None
 

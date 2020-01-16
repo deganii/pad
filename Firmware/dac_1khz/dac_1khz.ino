@@ -463,6 +463,8 @@ void draw_status(void) {
   if(buttonLeftPressed){
     buttonLeftPressed = false;
     isIlluminating = !isIlluminating;
+    Serial.print("isIlluminating toggled to: ");
+    Serial.println(isIlluminating);
     if(isIlluminating){
       enable_dac_sine();
     } else {
@@ -562,22 +564,35 @@ unsigned long lastDebounceTimeBottom = 0;  // the last time the output pin was t
 unsigned long debounceDelay = 100;    // the debounce time; increase if the output flickers
 
 void button_right_pressed() {
-  buttonRightPressed = debouncedButtonPress(&lastDebounceTimeRight);
+  if(debouncedButtonPress(&lastDebounceTimeRight)){
+    buttonRightPressed = true;
+  }
 }
+
 void button_left_pressed() {
-  buttonLeftPressed = debouncedButtonPress(&lastDebounceTimeLeft);
+  if(debouncedButtonPress(&lastDebounceTimeLeft)){
+    buttonLeftPressed = true;
+  }
 }
 void button_top_pressed() {
-  buttonTopPressed = debouncedButtonPress(&lastDebounceTimeTop);
+  if(debouncedButtonPress(&lastDebounceTimeTop)){
+    buttonTopPressed = true;
+  }
 }
 void button_bottom_pressed() {
-  buttonBottomPressed = debouncedButtonPress(&lastDebounceTimeBottom);
+  if(debouncedButtonPress(&lastDebounceTimeBottom)){
+    buttonBottomPressed = true;
+  }
 }
 
 bool debouncedButtonPress(unsigned long *lastDebounceTime){
+  //Serial.print("Last Debounce Time: ");
+  //Serial.println(*lastDebounceTime);
   if(millis() - *lastDebounceTime > debounceDelay){
     *lastDebounceTime =  millis();
+    //Serial.println("De-bounced press: True Press");
     return true;
   }
+  //Serial.println("De-bounced press: False Press");
   return false;
 }
