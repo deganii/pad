@@ -1,9 +1,8 @@
-//#include <ADC.h>
+#include <ADC.h>
 
 #include <PID_v1.h>
 //#include <PID_AutoTune_v0.h>
 #include <SPI.h>
-
 //#define SSD1306_128_32
 #include <DMAChannel.h>
 #include <SPI.h>
@@ -15,6 +14,7 @@
 #define Thermistor_PIN A0
 //#define Ix_PIN A1
 #define LED_PIN 13
+#define DAC_PIN A14
 
 //PID Variables
 #define PID_PIN 4
@@ -29,16 +29,15 @@ bool buttonBottomPressed = false;
 bool buttonTopPressed = false;
 bool buttonLeftPressed = false;
 
-// ADC Variables
+// External ADC Variables
 /*const byte CH0 = 0b10000000; //Channel select, select channel 1, unipolar mode
 const int chipSelectPin = 10;
 unsigned long finresult;*
-#include <ADC.h>
 */
 
 const int Ix_PIN = A1;
 const int Iy_PIN = A2;
-//ADC *adc = new ADC(); // adc object
+ADC *adc = new ADC(); // adc object
 //ADC::Sync_result result;
 
 unsigned long start_time = 0;
@@ -61,7 +60,6 @@ bool isHeating = false;
 //Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_SSD1306 display(OLED_RESET);
 
-
 // Multiple input & output objects use the Programmable Delay Block
 // to set their sample rate.  They must all configure the same
 // period to avoid chaos.
@@ -70,6 +68,8 @@ Adafruit_SSD1306 display(OLED_RESET);
 // idegani: Modified/Improved DMA DAC Generation. Initial low-res version here:
 // https://forum.pjrc.com/threads/28101-Using-the-DAC-with-DMA-on-Teensy-3-1
 DMAChannel dma(false);
+bool isIlluminating =false;
+
 
 // idegani: generated from 
 // https://daycounter.com/Calculators/Sine-Generator-Calculator.phtml
@@ -118,6 +118,9 @@ static volatile uint16_t sinetable[] = {
 1847,1859,1872,1884,1897,1909,1922,1934,1947,1959,1972,1985,1997,2010,2022,2035,2048
 };
 
+
+static volatile uint16_t adjusted_sinetable[ sizeof(sinetable)/sizeof(uint16_t)];
+
 void setup() {
   Serial.begin(9600); 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -125,8 +128,9 @@ void setup() {
   display.display();
 
   dma.begin(true); // allocate the DMA channel first
+  analogWrite(DAC_PIN, 0);
   
-  SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
+  /*SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
   DAC0_C0 = DAC_C0_DACEN | DAC_C0_DACRFS; // enable the DAC module, 3.3V reference
   // slowly ramp up to DC voltage, approx 1/4 second
   for (int16_t i=0; i<2048; i+=8) {
@@ -153,9 +157,9 @@ void setup() {
   PDB0_SC = PDB_CONFIG | PDB_SC_LDOK; // load registers from buffers
   PDB0_SC = PDB_CONFIG | PDB_SC_SWTRIG; // reset and restart
   PDB0_CH0C1 = 0x0101; // channel n control register?
-
+*/
   // alter the buffer to 0.4-2.4V as per LDD-1000L specification
-  static volatile uint16_t adjusted_sinetable[ sizeof(sinetable)/sizeof(uint16_t)]; // malloc(sizeof(sinetable), sizeof(uint16_t));
+  // static volatile uint16_t adjusted_sinetable[ sizeof(sinetable)/sizeof(uint16_t)]; // malloc(sizeof(sinetable), sizeof(uint16_t));
   //float factor =  2048.0 / 3.3; // 2048 == 3.3v
   float amplitude_scale = (2.2 - 0.6) / (3.3 - 0.0);  // (add an extra 200mV to avoid any clipping)
   uint16_t shift = (uint16_t)(1.15 * 2048.0 / 3.3);
@@ -170,11 +174,13 @@ void setup() {
 
   // DEBUG: zero to shut off the LED
   //memset (adjusted_sinetable, 0, sizeof(adjusted_sinetable));
-  
+  /*
   dma.sourceBuffer(adjusted_sinetable, sizeof(sinetable));
   dma.destination(*(volatile uint16_t *)&(DAC0_DAT0L));
   dma.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
-  dma.enable();
+  //dma.enable();
+  */
+
   
   pinMode(Thermistor_PIN, INPUT);
 
@@ -186,7 +192,7 @@ void setup() {
   pinMode(PID_PIN, OUTPUT);
   //turn the PID on
   myPID.SetMode(AUTOMATIC);
-  myPID.SetOutputLimits(0, 255);
+  myPID.SetOutputLimits(0, 256);
   
   /*aTune.SetControlType(1);  // PID
   //Set the output to the desired starting frequency.
@@ -219,14 +225,40 @@ void setup() {
   pinMode(13, OUTPUT);
 
   attachInterrupt(digitalPinToInterrupt(BUTTON_RIGHT), button_right_pressed, RISING);
-  //attachInterrupt(digitalPinToInterrupt(1), button_pressed, [[CHANGE, LOW, RISING, FALLING]]);
-  //attachInterrupt(digitalPinToInterrupt(2), button_pressed, [[CHANGE, LOW, RISING, FALLING]]);
-  //attachInterrupt(digitalPinToInterrupt(3), button_pressed, [[CHANGE, LOW, RISING, FALLING]]);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_LEFT), button_left_pressed, RISING);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_TOP), button_top_pressed, RISING);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_BOTTOM), button_bottom_pressed, RISING);
   //generate_dac_sine();
   //setup_adc();
   /*display.clearDisplay();
   display.drawBitmap(64,16, logo_bmp, 128, 32, 1);*/
   delay(2000);
+}
+
+void enable_dac_sine(){
+ SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
+  DAC0_C0 = DAC_C0_DACEN | DAC_C0_DACRFS; // enable the DAC module, 3.3V reference
+  // slowly ramp up to DC voltage, approx 1/4 second
+  for (int16_t i=0; i<2048; i+=8) {
+    *(int16_t *)&(DAC0_DAT0L) = i;
+    delay(1);
+  }
+  SIM_SCGC6 |= SIM_SCGC6_PDB; // enable PDB clock
+  PDB0_IDLY = 0; // interrupt delay register
+  PDB0_MOD = 47-1; // modulus register, sets period to 1Khz
+  PDB0_SC = PDB_CONFIG | PDB_SC_LDOK; // load registers from buffers
+  PDB0_SC = PDB_CONFIG | PDB_SC_SWTRIG; // reset and restart
+  PDB0_CH0C1 = 0x0101; // channel n control register?
+  dma.sourceBuffer(adjusted_sinetable, sizeof(sinetable));
+  dma.destination(*(volatile uint16_t *)&(DAC0_DAT0L));
+  dma.triggerAtHardwareEvent(DMAMUX_SOURCE_PDB);
+  dma.enable();
+}
+
+void disable_dac_sine(){
+  dma.disable();
+  //(int16_t *)&(DAC0_DAT0L) = 0;  
+  analogWrite(A14, 0);
 }
 
 /*void generate_dac_sine(){
@@ -262,7 +294,7 @@ void loop() {
   
   draw_status();
   //delay(1000);
-  delay(100);
+    delay(100);
 }
 
 /*void setup_adc(){
@@ -351,33 +383,31 @@ void draw_status(void) {
   //Serial.print(result.result_adc0*3.3/adc->getMaxValue(ADC_0), DEC);
   //Serial.println(result.result_adc1*3.3/adc->getMaxValue(ADC_1), DEC);
 
-
-
-  int intensityX = analogRead(A1);
-  int intensityY = analogRead(A2);
-
-
+  
+  int intensityX = adc->analogRead(A1, ADC_0);
+  int intensityY = adc->analogRead(A2, ADC_1);
+  //int intensityX = analogRead(A1);
+  //int intensityY = analogRead(A2);
 
   int buttonRight = digitalRead(BUTTON_RIGHT);
   int buttonBottom = digitalRead(BUTTON_BOTTOM);
   int buttonTop = digitalRead(BUTTON_TOP);
   int buttonLeft = digitalRead(BUTTON_LEFT);
 
-
-  
-
   if(start_time == 0){
     start_time = millis();  
   }
-  unsigned long curent_time  = (millis() - start_time) / 1000;
+  
+  unsigned long global_time  = millis() - start_time;
+  unsigned long curent_time  = global_time;
+  unsigned long current_time_sec = curent_time / 1000;
   static char current_time_str[8];
-  long h = curent_time / 3600;
-  curent_time = curent_time % 3600;
-  int m = curent_time / 60;
-  int s = curent_time % 60;
+  long h = current_time_sec / 3600;
+  current_time_sec = current_time_sec % 3600;
+  int m = current_time_sec / 60;
+  int s = current_time_sec % 60;
   sprintf(current_time_str, "%02ld:%02d:%02d", h, m, s);
 
-  
   
   display.clearDisplay();
   display.setTextSize(1);
@@ -430,30 +460,80 @@ void draw_status(void) {
     isHeating = !isHeating;
     digitalWrite(LED_PIN, isHeating ? HIGH : LOW);
   }
+  if(buttonLeftPressed){
+    buttonLeftPressed = false;
+    isIlluminating = !isIlluminating;
+    Serial.print("isIlluminating toggled to: ");
+    Serial.println(isIlluminating);
+    if(isIlluminating){
+      enable_dac_sine();
+    } else {
+      disable_dac_sine(); 
+    }
+  }
 
   //Serial.println("Time(ms) Ix(mV) Temp(C) PID");
-  //Serial.print((millis()-start_time) / 1000.0);
-  //Serial.print(' ');
+  Serial.print(global_time / 1000.0);
+  Serial.print(' ');
   Serial.print(intensityX);
   Serial.print(' ');
   Serial.print(intensityY);
   Serial.print(' ');
   Serial.print(temp);
   Serial.print(' ');
-  Serial.print((int)Output);
-  Serial.print(' ');
+  Serial.println((int)Output);
+
+  // read any requests from the USB Host
+  int incomingByte = 0;
+  while (Serial.available() > 0) {
+    // read the incoming byte:
+    incomingByte = Serial.read();
+    
+    // clock reset request
+    if(incomingByte == 'r'){
+      start_time = millis();
+    }
+
+    // Led off
+    else if(incomingByte == 'l'){
+        if(isIlluminating){
+          disable_dac_sine();
+          isIlluminating = false;
+        }
+    }
+    // Led on
+    else if(incomingByte == 'L'){
+        if(!isIlluminating){
+          enable_dac_sine();
+          isIlluminating = true;
+        }
+    }
+
+    // Heat off
+    else if(incomingByte == 'h'){
+      isHeating = false;
+    }
+    
+    // Heat on
+    else if(incomingByte == 'H'){
+      isHeating = true;
+    }
+  }
+
+  
+  /*Serial.print(' ');
   /*Serial.print(aTune.GetKp());
   Serial.print(',');
   Serial.print(aTune.GetKi());  
   Serial.print(',');
-  Serial.println(aTune.GetKd());*/
+  Serial.println(aTune.GetKd());
   Serial.print(buttonRight);
   Serial.print(' ');
   Serial.print(buttonBottom);
   Serial.print(' ');
   Serial.print(buttonTop);
   Serial.print(' ');
-  Serial.println(buttonLeft);
+  Serial.println(buttonLeft);*/
 
 
   /*if (button1 == HIGH) {
@@ -477,16 +557,42 @@ void draw_status(void) {
   display.display();*/
 }
 
+unsigned long lastDebounceTimeLeft = 0;  // the last time the output pin was toggled
+unsigned long lastDebounceTimeRight = 0;  // the last time the output pin was toggled
+unsigned long lastDebounceTimeTop = 0;  // the last time the output pin was toggled
+unsigned long lastDebounceTimeBottom = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 100;    // the debounce time; increase if the output flickers
 
 void button_right_pressed() {
-  buttonRightPressed = true;
+  if(debouncedButtonPress(&lastDebounceTimeRight)){
+    buttonRightPressed = true;
+  }
 }
+
 void button_left_pressed() {
-  buttonLeftPressed = true;
+  if(debouncedButtonPress(&lastDebounceTimeLeft)){
+    buttonLeftPressed = true;
+  }
 }
 void button_top_pressed() {
-  buttonTopPressed = true;
+  if(debouncedButtonPress(&lastDebounceTimeTop)){
+    buttonTopPressed = true;
+  }
 }
 void button_bottom_pressed() {
-  buttonBottomPressed = true;
+  if(debouncedButtonPress(&lastDebounceTimeBottom)){
+    buttonBottomPressed = true;
+  }
+}
+
+bool debouncedButtonPress(unsigned long *lastDebounceTime){
+  //Serial.print("Last Debounce Time: ");
+  //Serial.println(*lastDebounceTime);
+  if(millis() - *lastDebounceTime > debounceDelay){
+    *lastDebounceTime =  millis();
+    //Serial.println("De-bounced press: True Press");
+    return true;
+  }
+  //Serial.println("De-bounced press: False Press");
+  return false;
 }
