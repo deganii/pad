@@ -205,6 +205,8 @@ void setup() {
   //Serial.println("Ix(mV) Temp(C) PID");
   //Serial.println("Time(ms) Ix(mV) Iy(mV) Temp(C) PID");
   //Serial.println("Ix(mV) Iy(mV)");
+  
+  
   Serial.println("Ix(mV) Iy(mV) Temp(C) PID");
 
   // start the SPI library:
@@ -463,8 +465,8 @@ void draw_status(void) {
   if(buttonLeftPressed){
     buttonLeftPressed = false;
     isIlluminating = !isIlluminating;
-    Serial.print("isIlluminating toggled to: ");
-    Serial.println(isIlluminating);
+    //Serial.print("isIlluminating toggled to: ");
+    //Serial.println(isIlluminating);
     if(isIlluminating){
       enable_dac_sine();
     } else {
