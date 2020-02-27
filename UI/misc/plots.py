@@ -56,7 +56,9 @@ raw_perp_linear_std = np.std(np.vstack((raw_perp_linear_1, raw_perp_linear_2)), 
 
 
 # load experiment data
-exp_root = r'C:\dev\pad\Experiments\Glycerol_20200115-180314'
+# exp_root = r'C:\dev\pad\Experiments\Glycerol_20200115-180314'
+exp_root = r'C:\dev\pad\Experiments\Glycerol_Repeat_Align_20200127-170324'
+
 msmts =[]
 import re
 import glob
@@ -76,12 +78,51 @@ for i, file in enumerate(files):
             msmts_ix[msmt_num,j] = float(row[1])
             msmts_iy[msmt_num, j] = float(row[2])
 
-plate_parallel = raw_par_linear_avg
-pad_parallel = np.mean(msmts_ix, axis=1)
-pad_perp = np.mean(msmts_iy, axis=1)
+fig, ((pl_par, pa_par, sc_par), (pl_perp, pa_perp, sc_perp)) = plt.subplots(2, 3)
+
+# remove outliers from data due to LED being off
+msmts_ix[4,0] = msmts_ix[13,0] = np.nan
+msmts_iy[4,0] = msmts_iy[13,0] = np.nan
+
+plate_parallel = raw_par_linear_1
+plate_parallel_err = raw_par_linear_std
+pad_parallel = np.nanmean(msmts_ix, axis=1)
+pad_parallel_err = np.nanstd(msmts_ix, axis=1)
+
+plate_perp = raw_perp_linear_1
+plate_perp_err = raw_perp_linear_std
+pad_perp = np.nanmean(msmts_iy, axis=1)
+pad_perp_err = np.nanstd(msmts_iy, axis=1)
+
+
+
+
 
 # average the i_x and compare to
 # raw_par_linear_avg
 # plt.scatter(plate_parallel,pad_parallel)
-plt.scatter(raw_perp_linear_avg,pad_perp)
+
+
+sns.barplot(glycerol_linear, plate_parallel, ax=pl_par,
+             order=glycerol_linear, palette='Blues_d')
+sns.barplot(glycerol_linear, pad_parallel, ax=pa_par,
+            yerr=pad_parallel_err, order=glycerol_linear, palette='Greens_d')
+pl_par.set(xlabel='Glycerol (%)', ylabel='Plate Reader Fluorescence (a.u.)', ylim=(37000,53000))
+pa_par.set(xlabel='Glycerol (%)', ylabel='PAD Fluorescence (a.u.)', ylim=(160,240))
+cmap = sns.cubehelix_palette(dark=.3, light=.8, as_cmap=True) #'BuGn_r'
+sns.scatterplot(plate_parallel,pad_parallel, palette=cmap , ax=sc_par,  hue=glycerol_linear)
+sc_par.set(xlabel='Plate Reader Fluorescence (a.u.)', ylabel='PAD Fluorescence (a.u.)')
+
+
+sns.barplot(glycerol_linear, plate_perp, ax=pl_perp,
+             order=glycerol_linear, palette='Blues_d')
+sns.barplot(glycerol_linear, pad_perp, ax=pa_perp,
+            yerr=pad_perp_err, order=glycerol_linear, palette='Greens_d')
+pl_perp.set(xlabel='Glycerol (%)', ylabel='Plate Reader Fluorescence (a.u.)', ylim=(25000,45000))
+pa_perp.set(xlabel='Glycerol (%)', ylabel='PAD Fluorescence (a.u.)', ylim=(300,425))
+cmap = sns.cubehelix_palette(dark=.3, light=.8, as_cmap=True) #'BuGn_r'
+sns.scatterplot(plate_perp,pad_perp, palette=cmap , ax=sc_perp,  hue=glycerol_linear)
+sc_perp.set(xlabel='Plate Reader Fluorescence (a.u.)', ylabel='PAD Fluorescence (a.u.)')
+
+
 plt.show()

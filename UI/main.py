@@ -294,6 +294,8 @@ class PadMainWindow(QtWidgets.QMainWindow):
             # TODO: add logic to only redraw when data changes...
             if self.experiment_running:
                 self.experiment.draw_plot(self._exp_ax)
+                # save the updated plot
+                self.exp_canvas.figure.savefig(self.experiment.root + 'plot.png')
                 self.update_time_remaining()
                 if self.experiment.is_complete():
                     self.stop_experiment()
@@ -309,8 +311,6 @@ class PadMainWindow(QtWidgets.QMainWindow):
                     msg.buttonClicked.connect(self.on_finished_discrete)
                     msg.show()
                 elif self.experiment.waiting_new_sample() and not self.prompting:
-                    # save the updated plot
-                    self.exp_canvas.figure.savefig(self.experiment.root + 'plot.png')
                     self.prompt_next_measurement()
             self._redraw(self._pa_ax, partial=dataPartial)
             self._redraw(self._temp_ax, partial=dataPartial, scale_y=False)
@@ -438,6 +438,7 @@ class PadMainWindow(QtWidgets.QMainWindow):
         self._update_estimated_time()
         self.progressBar.setDisabled(True)
         self.progressBar.setValue(0)
+        self.experiment.save_npz()
         self.experiment_running = False
         self.experiment = None
 

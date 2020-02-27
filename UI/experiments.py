@@ -43,8 +43,20 @@ class DiscreteExperiment:
                     'raw_pa_r': deque(maxlen=self.samples_per_measurement),
                     'pa_delta_r': deque(maxlen=self.samples_per_measurement)})
 
+    def save_npz(self):
+        with self.data_lock:
+            filename = self.root + 'data.npz'
+            fields = ['t', 'i_x', 'i_y', 'temp', 'pid_ctrl',
+                      'ref_x', 'ref_y', 'ref_pa_r0', 'raw_pa_r', 'pa_delta_r']
+            data_np = np.empty(shape=(self.num_measurements, len(fields),
+                        self.samples_per_measurement))
+            for m in range(self.num_measurements):
+                for f_idx, f in enumerate(fields):
+                    data_np[m,f_idx] = self.exp_data[m][f]
+            np.savez(filename, data=data_np)
+
     # called by UI timer thread when the UI wants an updated plot
-    def draw_plot(self, ax):
+    def draw_plot(self, ax): # todo: overlay the time series using twiny()
         if self.measurements_completed > 0:
             # print('Started Exp draw_plot')
             with self.data_lock:
@@ -64,6 +76,10 @@ class DiscreteExperiment:
                 ax.set_xlabel("Measurement ID (n)")
                 ax.set_ylabel("$\Delta r$")
                 ax.set_xlim(-1,self.num_measurements)
+
+                # plot raw results on top of bar so that the
+                # t_ax.plot
+
             # print('Completed Exp draw_plot\n')
 
     def start_measurement(self):

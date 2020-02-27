@@ -64,19 +64,21 @@ class SerialModule:
         # reset the arduino clock
         self.serialConnection.write(b'r')
         # give it some time to reset
-        time.sleep(0.2)
+        time.sleep(0.5)
         with self.data_lock:
             self.init_data()
 
     def set_heating(self, isHeating):
         self.serialConnection.write(b'H' if isHeating else b'h')
         self.isHeating = isHeating
-        time.sleep(0.2)
+        time.sleep(0.5)
 
     def set_led(self, isIlluminating):
         self.serialConnection.write(b'L' if isIlluminating else b'l')
         self.isIlluminating = isIlluminating
-        time.sleep(0.2)
+        # give extra time to make sure LED is on when measurements begin
+        # todo: instead of waiting, change state based on async MCU notification...
+        time.sleep(0.5)
 
     def start_logging(self, filename, callback):
         with self.data_lock:
